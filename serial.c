@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <unistd.h>
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <fcntl.h>
@@ -15,67 +16,65 @@ enum PARITY_TYPE{
 };
 
 #define RAW_LINE_INPUT
+#define BUF_SIZE 200
+char buffer[BUF_SIZE];
 
+void send_soe(int fd);
+void change_vendor(int fd, int type);
+void print_senddata(unsigned int len);
 void set_serial_options(int, int);
 unsigned short crc16(unsigned short crc, unsigned char const *buffer, size_t len);
 
 int main(int argc, char *argv[])
 {
-    char serial_dev[20] = "/dev/ttyUSB0";
+    char *serial_dev = NULL;
     int serial_fd, read_sz;
-    char buffer[200];
     int i;
     unsigned int crc_checksum;
+    int arg;
 
     if(argc < 2){
         printf("Usage:./comtool /dev/tty0\n");
         exit(-2);
     }
+    
+    opterr = 0;
+
+    while((arg = getopt(argc, argv, "i:")) != -1){
+        switch(arg){
+            case 'i':
+                serial_dev = optarg;
+                break;
+            default:
+                abort();
+        }
+    }
+
+    
    
-    printf("Serial Port is%s\n", argv[1]);
-    serial_fd = open(argv[1], O_RDWR | O_NOCTTY | O_NDELAY);
+    printf("Serial Port is %s\n", serial_dev);
+    serial_fd = open(serial_dev, O_RDWR | O_NOCTTY | O_NDELAY);
     if(serial_fd < 0){
         perror("Could not open serial prot\n");
         exit(-1);
     }
-
+#if 0
     set_serial_options(serial_fd, EVEN_PARITY);
-
-    memset(buffer, 0, sizeof(buffer));
-
-#if 1
-    buffer[0] = 0x01;
-    buffer[1] = 0x04;
-    buffer[2] = 0x41;
-    buffer[3] = 0x00;
-    buffer[4] = 0x00;
-    buffer[5] = 0x07;
-#endif
-    crc_checksum = crc16(0xffff, buffer, 6);
-    printf("crc_byte1:%x\n", crc_checksum & 0xff);
-    printf("crc_byte2:%x\n", ((crc_checksum >> 8) & 0xff));
-    buffer[6] = (char)(crc_checksum & 0xff);
-    buffer[7] = (char)((crc_checksum >> 8) & 0xff);
-   
-    printf("Sending data:");
-    for(i = 0; i < 8; i++)
-        printf("0x%02x ", buffer[i]);
-    printf("\n");
-
-    write(serial_fd, buffer, 8);
-#if 1
-    while(1){
+    send_soe(serial_fd);
     sleep(1);
-
-    memset(buffer, 0, sizeof(buffer));
-    read_sz = read(serial_fd, buffer, sizeof(buffer));
-    if(read_sz > 0)
-        printf("recv data count = %d\n", read_sz);
-        for(i = 0; i < read_sz; i++)
-            printf("0x%02x ", (char)buffer[i]);
-        printf("\n");
-    }
+    recv_data(serial_fd, buffer);
+#else
+    change_vendor(serial_fd, 1);
+    sleep(1);
+    recv_data(serial_fd, buffer);
+    change_vendor(serial_fd, 2);
+    sleep(1);
+    recv_data(serial_fd, buffer);
 #endif
+    while(1){
+        sleep(1);
+
+    }
     close(serial_fd);
     return 0;
 }
@@ -167,4 +166,81 @@ unsigned short crc16(unsigned short crc, unsigned char const *buffer, size_t len
     }
 
     return crc;
+}
+
+void send_soe(int fd)
+{
+    unsigned int crc_checksum;
+    
+    memset(buffer, 0, BUF_SIZE);
+    buffer[0] = 0x01;
+    buffer[1] = 0x04;
+    buffer[2] = 0x41;
+    buffer[3] = 0x00;
+    buffer[4] = 0x00;
+    buffer[5] = 0x07;
+    
+    crc_checksum = crc16(0xffff, buffer, 6);
+    printf("crc_byte1:%x\n", crc_checksum & 0xff);
+    printf("crc_byte2:%x\n", ((crc_checksum >> 8) & 0xff));
+    buffer[6] = (char)(crc_checksum & 0xff);
+    buffer[7] = (char)((crc_checksum >> 8) & 0xff);
+    
+    print_senddata(8);
+    write(fd, buffer, 8);
+ 
+}
+
+void change_vendor(int fd, int type)
+{
+    unsigned int crc_checksum;
+    
+    memset(buffer, 0, BUF_SIZE);
+    
+    buffer[0] = 0x01;
+    buffer[1] = 0x10;
+    if(type == 1)
+        buffer[2] = 0x42;
+    else if(type == 2)
+        buffer[2] = 0x40;
+    buffer[3] = 0x78;
+    buffer[4] = 0x00;
+    buffer[5] = 0x01;
+    buffer[6] = 0x02;
+    buffer[7] = 0x00;
+    buffer[8] = 0x3;
+    
+    crc_checksum = crc16(0xffff, buffer, 9);
+    buffer[9] = (char)(crc_checksum & 0xff);
+    buffer[10] = (char)((crc_checksum >> 8) & 0xff);
+    
+    print_senddata(11);
+    write(fd, buffer, 11);
+ 
+}
+
+void recv_data(int fd)
+{
+    int read_sz, i;
+
+    memset(buffer, 0, BUF_SIZE);
+    
+    read_sz = read(fd, buffer, sizeof(buffer));
+    if(read_sz > 0){
+        printf("Recv[%d]:", read_sz);
+        for(i = 0; i < read_sz; i++)
+            printf("0x%02x ", (char)buffer[i]);
+        printf("\n");
+    }
+}
+
+void print_senddata(unsigned int len)
+{
+    int i;
+
+    printf("Sending[%d]:", len);
+    for(i = 0; i < len; i++)
+        printf("0x%02x ", buffer[i]);
+    printf("\n");
+
 }
