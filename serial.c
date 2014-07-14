@@ -18,10 +18,15 @@ enum PARITY_TYPE{
     SPACE_PARITY = 's',
 };
 
+#define RS485_INF
+//#define ETHER_INF
+
 #define RAW_LINE_INPUT
 #define BUF_SIZE 200
 char buffer[BUF_SIZE];
 
+void read_yx(int fd);
+int recv_data(int fd, char* out);
 void read_config(int fd);
 void send_soe(int fd);
 void change_vendor(int fd, int type);
@@ -31,16 +36,21 @@ unsigned short crc16(unsigned short crc, unsigned char const *buffer, size_t len
 
 int main(int argc, char *argv[])
 {
-    char *serial_dev = NULL;
-    int serial_fd, read_sz, socket_enable;
+    char *serial_dev;
+    char *tmp = NULL;
+    unsigned int register_addr;
+    unsigned int register_cnt;
+    int serial_fd, socket_enable = 0;
     int i;
     unsigned int crc_checksum;
     int arg;
     int soe_flag = 0;
     int vendor_flag = 0;
     int rconfig_flag = 0;
+    int yx_flag = 0;
     struct sockaddr_in device_addr;
     int sockfd;
+    int device_fd;
 
     if(argc < 2){
         printf("Usage:./comtool /dev/tty0\n");
@@ -49,15 +59,20 @@ int main(int argc, char *argv[])
     
     opterr = 0;
 
-    while((arg = getopt(argc, argv, "i:svr")) != -1){
+    while((arg = getopt(argc, argv, "a:i:l:svr")) != -1){
         switch(arg){
+            case 'a':
+                tmp = optarg;
+                register_addr = atoi(tmp);
+                printf("RegisterAddress(HEX)=%d\n", register_addr);
+                break;
+            case 'l':
+                tmp = optarg;
+                register_cnt = atoi(tmp);
+                printf("RequestCount(DEC)=%d\n", register_cnt);
+                break;
             case 'i':
-                printf("%s\n", optarg);
-                if(strcmp(optarg, "socket") == 0){
-                    socket_enable = 1; 
-                }else
-                    serial_dev = optarg;
-
+                serial_dev = optarg;
                 break;
             case 's':
                 soe_flag = 1;
@@ -68,13 +83,15 @@ int main(int argc, char *argv[])
             case 'r':
                 rconfig_flag = 1;
                 break;
+            case 'y':
+                yx_flag = 1;
+                break;
             default:
                 abort();
         }
     }
 
-    
-    if(serial_dev){
+#ifdef RS485_INF 
         printf("Serial Port is %s\n", serial_dev);
         serial_fd = open(serial_dev, O_RDWR | O_NOCTTY | O_NDELAY);
         if(serial_fd < 0){
@@ -82,9 +99,9 @@ int main(int argc, char *argv[])
             exit(-1);
         }
         set_serial_options(serial_fd, EVEN_PARITY);
-    }
-
-    if(socket_enable){
+        device_fd = serial_fd;
+#endif
+#ifdef ETHER_INF
         sockfd = socket(AF_INET, SOCK_DGRAM, 0);
         if(sockfd < 0){
             perror("creat socket failed\n");
@@ -95,41 +112,40 @@ int main(int argc, char *argv[])
         device_addr.sin_family = AF_INET;
         device_addr.sin_port = htons(9764);
         device_addr.sin_addr.s_addr = inet_addr("192.168.1.220");
-    }
+        device_fd = sockfd;
+#endif
 
     if(soe_flag){
-        if(socket_enable)
-            send_soe(sockfd);
-        else
-            send_soe(serial_fd);
+        send_soe(device_fd);
         sleep(1);
-        if(socket_enable)
-            recv_data(sockfd, buffer);
-        else
-            recv_data(serial_fd, buffer);
+        recv_data(device_fd, buffer);
+    }
+
+    if(yx_flag){
+        read_yx(device_fd);
+        sleep(1);
+        recv_data(device_fd, buffer);
     }
 
     if(vendor_flag){
-        change_vendor(serial_fd, 1);
+        change_vendor(device_fd, 1);
         sleep(1);
         recv_data(serial_fd, buffer);
-        change_vendor(serial_fd, 2);
+        change_vendor(device_fd, 2);
         sleep(1);
-        recv_data(serial_fd, buffer);
+        recv_data(device_fd, buffer);
     }
 
     if(rconfig_flag){
         char config[100];
         unsigned int config_cnt;
-        float sd_i = 0;
-        int sd_t = 0;
         float config_value[30];
         int i, j, value_tmp;
 
         memset(config, 0, sizeof(config));
-        read_config(serial_fd);
+        read_config(device_fd);
         sleep(1);
-        config_cnt = recv_data(serial_fd, config);
+        config_cnt = recv_data(device_fd, config);
         config_cnt = config_cnt;
 
         for(i = 0, j = 0; i < config_cnt; j++){
@@ -173,7 +189,7 @@ int main(int argc, char *argv[])
         sleep(1);
 
     }
-    close(serial_fd);
+    close(device_fd);
     return 0;
 }
 
@@ -271,12 +287,37 @@ void send_soe(int fd)
     unsigned int crc_checksum;
     
     memset(buffer, 0, BUF_SIZE);
+    
     buffer[0] = 0x01;
     buffer[1] = 0x04;
     buffer[2] = 0x41;
     buffer[3] = 0x00;
     buffer[4] = 0x00;
     buffer[5] = 0x07;
+
+    crc_checksum = crc16(0xffff, buffer, 6);
+    printf("crc_byte1:%x\n", crc_checksum & 0xff);
+    printf("crc_byte2:%x\n", ((crc_checksum >> 8) & 0xff));
+    buffer[6] = (char)(crc_checksum & 0xff);
+    buffer[7] = (char)((crc_checksum >> 8) & 0xff);
+    
+    print_senddata(8);
+    write(fd, buffer, 8);
+ 
+}
+
+void read_yx(int fd)
+{
+    unsigned int crc_checksum;
+    
+    memset(buffer, 0, BUF_SIZE);
+    
+    buffer[0] = 0x01;
+    buffer[1] = 0x03;
+    buffer[2] = 0x40;
+    buffer[3] = 0x01;
+    buffer[4] = 0x00;
+    buffer[5] = 0x03;
     
     crc_checksum = crc16(0xffff, buffer, 6);
     printf("crc_byte1:%x\n", crc_checksum & 0xff);
@@ -323,7 +364,7 @@ int recv_data(int fd, char* out)
 
     memset(buffer, 0, BUF_SIZE);
     
-    read_sz = read(fd, buffer, sizeof(buffer));
+    read_sz = read(fd, buffer, BUF_SIZE);
     if(read_sz > 0){
         printf("Recv[%d]:", read_sz);
         for(i = 0; i < read_sz; i++)
