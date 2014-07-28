@@ -8,6 +8,7 @@
 #include <termios.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
+#include <arpa/inet.h>
 #include <unistd.h>
 #include "serial.h"
 
@@ -18,8 +19,14 @@ enum PARITY_TYPE{
     SPACE_PARITY = 's',
 };
 
-#define RS485_INF
-//#define ETHER_INF
+#define PROG_NAME "Modbus Tester"
+#define PROG_VERSION "0.0.1"
+#define APP_TCP
+//#define APP_UDP
+#define DEVICE_PORT 1024
+
+//#define RS485_INF
+#define ETHER_INF
 
 #define RAW_LINE_INPUT
 #define BUF_SIZE 200
@@ -33,6 +40,7 @@ void change_vendor(int fd, int type);
 void print_senddata(unsigned int len);
 void set_serial_options(int, int);
 unsigned short crc16(unsigned short crc, unsigned char const *buffer, size_t len);
+void usage_info();
 
 int main(int argc, char *argv[])
 {
@@ -48,18 +56,20 @@ int main(int argc, char *argv[])
     int vendor_flag = 0;
     int rconfig_flag = 0;
     int yx_flag = 0;
+    int tcp_flag = 0;
+    int udp_flag = 0;
     struct sockaddr_in device_addr;
     int sockfd;
     int device_fd;
 
     if(argc < 2){
-        printf("Usage:./comtool /dev/tty0\n");
+        printf("Usage:./serialtool -i /dev/ttyS0 -svr\n");
         exit(-2);
     }
     
     opterr = 0;
 
-    while((arg = getopt(argc, argv, "a:i:l:svr")) != -1){
+    while((arg = getopt(argc, argv, "a:i:l:svrytuh")) != -1){
         switch(arg){
             case 'a':
                 tmp = optarg;
@@ -86,6 +96,16 @@ int main(int argc, char *argv[])
             case 'y':
                 yx_flag = 1;
                 break;
+            case 't':
+                tcp_flag = 1;
+                break;
+            case 'u':
+                udp_flag = 1;
+                break;
+            case 'h':
+                usage_info();
+                goto FIN;
+                break;
             default:
                 abort();
         }
@@ -102,7 +122,15 @@ int main(int argc, char *argv[])
         device_fd = serial_fd;
 #endif
 #ifdef ETHER_INF
-        sockfd = socket(AF_INET, SOCK_DGRAM, 0);
+
+        if(tcp_flag){
+            sockfd = socket(AF_INET, SOCK_STREAM, 0);
+        }
+
+        if(udp_flag){
+            sockfd = socket(AF_INET, SOCK_DGRAM, 0);
+        }
+
         if(sockfd < 0){
             perror("creat socket failed\n");
             exit(-1);
@@ -110,9 +138,16 @@ int main(int argc, char *argv[])
 
         memset(&device_addr, 0, sizeof(device_addr));
         device_addr.sin_family = AF_INET;
-        device_addr.sin_port = htons(9764);
-        device_addr.sin_addr.s_addr = inet_addr("192.168.1.220");
+        device_addr.sin_port = htons(1024);
+        device_addr.sin_addr.s_addr = inet_addr("192.168.1.136");
         device_fd = sockfd;
+
+        if(tcp_flag){
+            if(connect(device_fd, (struct sockaddr*)&device_addr, sizeof(device_addr)) < 0){
+                printf("can not connect\n");
+                exit(1);
+            }
+        }
 #endif
 
     if(soe_flag){
@@ -130,26 +165,24 @@ int main(int argc, char *argv[])
     if(vendor_flag){
         change_vendor(device_fd, 1);
         sleep(1);
-        recv_data(serial_fd, buffer);
+        recv_data(device_fd, buffer);
         change_vendor(device_fd, 2);
         sleep(1);
         recv_data(device_fd, buffer);
     }
 
     if(rconfig_flag){
-        char config[100];
         unsigned int config_cnt;
         float config_value[30];
         int i, j, value_tmp;
 
-        memset(config, 0, sizeof(config));
         read_config(device_fd);
         sleep(1);
-        config_cnt = recv_data(device_fd, config);
-        config_cnt = config_cnt;
+        config_cnt = recv_data(device_fd, buffer);
+        printf("Config has %d bytes\n", config_cnt);
 
         for(i = 0, j = 0; i < config_cnt; j++){
-            value_tmp = (config[i] << 8) | (config[i + 1] & 0xff);
+            value_tmp = (buffer[i] << 8) | (buffer[i + 1] & 0xff);
             //printf("item%d = 0x%x\n", j, value_tmp);
             config_value[j] = value_tmp / 100;
 
@@ -157,7 +190,6 @@ int main(int argc, char *argv[])
         }
         //sd_i = ((config[1] << 8) | config[2]) / 100;
 
-        printf("Config has %d bytes\n", config_cnt);
 #if 0
         for(i = 0; i < config_cnt / 2; i++){
             printf("%d = %0.2f\n", i, config_value[i]);
@@ -187,9 +219,11 @@ int main(int argc, char *argv[])
 
     while(1){
         sleep(1);
-
     }
+
     close(device_fd);
+
+FIN:
     return 0;
 }
 
@@ -315,7 +349,7 @@ void read_yx(int fd)
     buffer[0] = 0x01;
     buffer[1] = 0x03;
     buffer[2] = 0x40;
-    buffer[3] = 0x01;
+    buffer[3] = 0x00;
     buffer[4] = 0x00;
     buffer[5] = 0x03;
     
@@ -399,7 +433,7 @@ void read_config(int fd)
     buffer[2] = 0x40;
     buffer[3] = 0xc0;
     buffer[4] = 0x00;
-    buffer[5] = 0x10;
+    buffer[5] = 0x01;
     
     crc_checksum = crc16(0xffff, buffer, 6);
     buffer[6] = (char)(crc_checksum & 0xff);
@@ -410,3 +444,23 @@ void read_config(int fd)
  
 }
 
+char* usage_array[] = 
+{
+    "-t use tcp socket",
+    "-u use udp socket",
+    "-a Modbus register address",
+    "-l Modbus length of target",
+    "-s send soe packet",
+    "-y send YX packet",
+    "-r send read config value packet",
+};
+void usage_info()
+{
+    int i;
+
+    printf("%s\tver:%s\n", PROG_NAME, PROG_VERSION);
+    for(i = 0; i < 6; i++)
+    {
+        printf("%s\n", usage_array[i]);
+    }
+}
