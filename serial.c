@@ -521,6 +521,7 @@ char* usage_array[] =
     "-u use udp socket type",
     "-d IP address which you want connect",
     "-p fill server port number to connect",
+    "-i Serial port device, eg: -i /dev/ttyUSB0",
     "-a Modbus register address",
     "-l Modbus length of target",
     "-s send soe packet",
