@@ -12,6 +12,11 @@
 #include <unistd.h>
 #include "serial.h"
 
+enum BOOL{
+    TRUE = 1,
+    FALSE = 0,
+};
+
 enum REMOTE_CONTROL_CMD{
     PRE_CONTROL_CMD = 1,
     ACT_CONTROL_CMD = 0,
@@ -51,20 +56,22 @@ void usage_info();
 int main(int argc, char *argv[])
 {
     char *serial_dev;
+    char *device_ip;
     char *tmp = NULL;
     unsigned int register_addr;
     unsigned int register_cnt;
+    unsigned int comm_port;
     int serial_fd, socket_enable = 0;
     int i;
     unsigned int crc_checksum;
     int arg;
-    int soe_flag = 0;
-    int vendor_flag = 0;
-    int rconfig_flag = 0;
-    int yx_flag = 0;
-    int yk_flag = 0;
-    int tcp_flag = 0;
-    int udp_flag = 0;
+    int soe_flag = FALSE;
+    int vendor_flag = FALSE;
+    int rconfig_flag = FALSE;
+    int yx_flag = FALSE;
+    int yk_flag = FALSE;
+    int tcp_flag = FALSE;
+    int udp_flag = FALSE;
     struct sockaddr_in device_addr;
     int sockfd = 0;
     int device_fd = 0;
@@ -76,7 +83,7 @@ int main(int argc, char *argv[])
     
     opterr = 0;
 
-    while((arg = getopt(argc, argv, "a:i:l:svrytuhk")) != -1){
+    while((arg = getopt(argc, argv, "a:i:l:p:d:svrytuhk")) != -1){
         switch(arg){
             case 'a':
                 tmp = optarg;
@@ -91,26 +98,33 @@ int main(int argc, char *argv[])
             case 'i':
                 serial_dev = optarg;
                 break;
+            case 'd':
+                device_ip = optarg;
+                break;
             case 's':
-                soe_flag = 1;
+                soe_flag = TRUE;
                 break;
             case 'v':
-                vendor_flag = 1;
+                vendor_flag = TRUE;
                 break;
             case 'r':
-                rconfig_flag = 1;
+                rconfig_flag = TRUE;
                 break;
             case 'y':
-                yx_flag = 1;
+                yx_flag = TRUE;
                 break;
             case 't':
-                tcp_flag = 1;
+                tcp_flag = TRUE;
                 break;
             case 'u':
-                udp_flag = 1;
+                udp_flag = TRUE;
                 break;
             case 'k':
-                yk_flag = 1;
+                yk_flag = TRUE;
+                break;
+            case 'p':
+                tmp = optarg;
+                comm_port = atoi(tmp);
                 break;
             case 'h':
                 usage_info();
@@ -133,7 +147,7 @@ int main(int argc, char *argv[])
 #endif
 #ifdef ETHER_INF
 
-        printf("Network IP:%s, Port:%d\n", DEVICE_SERVER, DEVICE_PORT);
+        printf("Network IP:%s, Port:%d\n", device_ip, comm_port);
         if(tcp_flag){
             sockfd = socket(AF_INET, SOCK_STREAM, 0);
         }
@@ -149,7 +163,7 @@ int main(int argc, char *argv[])
 
         memset(&device_addr, 0, sizeof(device_addr));
         device_addr.sin_family = AF_INET;
-        device_addr.sin_port = htons(DEVICE_PORT);
+        device_addr.sin_port = htons(comm_port);
         device_addr.sin_addr.s_addr = inet_addr(DEVICE_SERVER);
         device_fd = sockfd;
 
@@ -503,8 +517,10 @@ void read_config(int fd)
 
 char* usage_array[] = 
 {
-    "-t use tcp socket",
-    "-u use udp socket",
+    "-t use tcp socket type",
+    "-u use udp socket type",
+    "-d IP address which you want connect",
+    "-p fill server port number to connect",
     "-a Modbus register address",
     "-l Modbus length of target",
     "-s send soe packet",
