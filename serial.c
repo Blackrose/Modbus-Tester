@@ -12,6 +12,11 @@
 #include <unistd.h>
 #include "serial.h"
 
+enum REMOTE_CONTROL_CMD{
+    PRE_CONTROL_CMD = 1,
+    ACT_CONTROL_CMD = 0,
+};
+
 enum PARITY_TYPE{
     NO_PARITY = 'n',
     ODD_PARITY = 'o',
@@ -24,7 +29,7 @@ enum PARITY_TYPE{
 #define APP_TCP
 //#define APP_UDP
 #define DEVICE_PORT 1024
-
+#define DEVICE_SERVER "192.168.1.136"
 //#define RS485_INF
 #define ETHER_INF
 
@@ -39,6 +44,7 @@ void send_soe(int fd);
 void change_vendor(int fd, int type);
 void print_senddata(unsigned int len);
 void set_serial_options(int, int);
+void control_yk(int fd, unsigned int flag);
 unsigned short crc16(unsigned short crc, unsigned char const *buffer, size_t len);
 void usage_info();
 
@@ -56,11 +62,12 @@ int main(int argc, char *argv[])
     int vendor_flag = 0;
     int rconfig_flag = 0;
     int yx_flag = 0;
+    int yk_flag = 0;
     int tcp_flag = 0;
     int udp_flag = 0;
     struct sockaddr_in device_addr;
-    int sockfd;
-    int device_fd;
+    int sockfd = 0;
+    int device_fd = 0;
 
     if(argc < 2){
         printf("Usage:./serialtool -i /dev/ttyS0 -svr\n");
@@ -69,7 +76,7 @@ int main(int argc, char *argv[])
     
     opterr = 0;
 
-    while((arg = getopt(argc, argv, "a:i:l:svrytuh")) != -1){
+    while((arg = getopt(argc, argv, "a:i:l:svrytuhk")) != -1){
         switch(arg){
             case 'a':
                 tmp = optarg;
@@ -102,6 +109,9 @@ int main(int argc, char *argv[])
             case 'u':
                 udp_flag = 1;
                 break;
+            case 'k':
+                yk_flag = 1;
+                break;
             case 'h':
                 usage_info();
                 goto FIN;
@@ -123,6 +133,7 @@ int main(int argc, char *argv[])
 #endif
 #ifdef ETHER_INF
 
+        printf("Network IP:%s, Port:%d\n", DEVICE_SERVER, DEVICE_PORT);
         if(tcp_flag){
             sockfd = socket(AF_INET, SOCK_STREAM, 0);
         }
@@ -131,15 +142,15 @@ int main(int argc, char *argv[])
             sockfd = socket(AF_INET, SOCK_DGRAM, 0);
         }
 
-        if(sockfd < 0){
+        if(sockfd <= 0){
             perror("creat socket failed\n");
             exit(-1);
         }
 
         memset(&device_addr, 0, sizeof(device_addr));
         device_addr.sin_family = AF_INET;
-        device_addr.sin_port = htons(1024);
-        device_addr.sin_addr.s_addr = inet_addr("192.168.1.136");
+        device_addr.sin_port = htons(DEVICE_PORT);
+        device_addr.sin_addr.s_addr = inet_addr(DEVICE_SERVER);
         device_fd = sockfd;
 
         if(tcp_flag){
@@ -158,6 +169,16 @@ int main(int argc, char *argv[])
 
     if(yx_flag){
         read_yx(device_fd);
+        sleep(1);
+        recv_data(device_fd, buffer);
+    }
+
+    if(yk_flag){
+        control_yk(device_fd, PRE_CONTROL_CMD);
+        sleep(1);
+        recv_data(device_fd, buffer);
+        sleep(1);
+        control_yk(device_fd, ACT_CONTROL_CMD);
         sleep(1);
         recv_data(device_fd, buffer);
     }
@@ -352,6 +373,42 @@ void read_yx(int fd)
     buffer[3] = 0x00;
     buffer[4] = 0x00;
     buffer[5] = 0x03;
+    
+    crc_checksum = crc16(0xffff, buffer, 6);
+    printf("crc_byte1:%x\n", crc_checksum & 0xff);
+    printf("crc_byte2:%x\n", ((crc_checksum >> 8) & 0xff));
+    buffer[6] = (char)(crc_checksum & 0xff);
+    buffer[7] = (char)((crc_checksum >> 8) & 0xff);
+    
+    print_senddata(8);
+    write(fd, buffer, 8);
+ 
+}
+
+/* --------------------------------*/
+/**
+ * @Synopsis : send remote control packet to device
+ *
+ * @Param fd
+ * @Param flag : if flag is lager then zero, it means send pre-control packet.
+ * if flag is equal zero, it means send act-control packet.
+ */
+/* --------------------------------*/
+void control_yk(int fd, unsigned int flag)
+{
+    unsigned int crc_checksum;
+    
+    memset(buffer, 0, BUF_SIZE);
+    
+    buffer[0] = 0x01;
+    buffer[1] = 0x05;
+    if(flag)
+        buffer[2] = 0x51;
+    else
+        buffer[2] = 0x50;
+    buffer[3] = 0x08;
+    buffer[4] = 0x5a;
+    buffer[5] = 0x00;
     
     crc_checksum = crc16(0xffff, buffer, 6);
     printf("crc_byte1:%x\n", crc_checksum & 0xff);
