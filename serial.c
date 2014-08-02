@@ -29,6 +29,14 @@ enum PARITY_TYPE{
     SPACE_PARITY = 's',
 };
 
+enum ERR_CODE{
+    ERR_WRONG_ARG = 1,
+    ERR_WRONG_SOCK = 2,
+    ERR_WRONG_DEV = 3,
+    ERR_SOCK_CONCT = 4,
+    ERR_SERIAL_DEV = 5,
+};
+
 #define PROG_NAME "Modbus Tester"
 #define PROG_VERSION "0.0.1"
 #define APP_TCP
@@ -42,26 +50,26 @@ enum PARITY_TYPE{
 #define BUF_SIZE 200
 char buffer[BUF_SIZE];
 
-void read_yx(int fd);
+void read_teleindication(int fd);
 int recv_data(int fd, char* out);
 void read_config(int fd);
 void send_soe(int fd);
 void change_vendor(int fd, int type);
 void print_senddata(unsigned int len);
 void set_serial_options(int, int);
-void control_yk(int fd, unsigned int flag);
+void telecontrol(int fd, unsigned int flag);
 unsigned short crc16(unsigned short crc, unsigned char const *buffer, size_t len);
 void usage_info();
 
 int main(int argc, char *argv[])
 {
-    char *serial_dev;
-    char *device_ip;
+    char *serial_dev = NULL;
+    char *device_ip = NULL;
     char *tmp = NULL;
     unsigned int register_addr;
     unsigned int register_cnt;
     unsigned int comm_port;
-    int serial_fd, socket_enable = 0;
+    int serial_fd, socket_enable = FALSE;
     int i;
     unsigned int crc_checksum;
     int arg;
@@ -77,8 +85,8 @@ int main(int argc, char *argv[])
     int device_fd = 0;
 
     if(argc < 2){
-        printf("Usage:./serialtool -i /dev/ttyS0 -svr\n");
-        exit(-2);
+        usage_info();
+        exit(ERR_WRONG_ARG);
     }
     
     opterr = 0;
@@ -135,17 +143,17 @@ int main(int argc, char *argv[])
         }
     }
 
-#ifdef RS485_INF 
-        printf("Serial Port is %s\n", serial_dev);
-        serial_fd = open(serial_dev, O_RDWR | O_NOCTTY | O_NDELAY);
-        if(serial_fd < 0){
-            perror("Could not open serial prot\n");
-            exit(-1);
-        }
-        set_serial_options(serial_fd, EVEN_PARITY);
-        device_fd = serial_fd;
-#endif
-#ifdef ETHER_INF
+    if(serial_dev && (tcp_flag || udp_flag)){
+        printf("You could choose communicate device from Serial port or Network interface. Don't use both!!!\n");
+        exit(ERR_WRONG_DEV);
+    }
+
+    if(serial_dev){
+        socket_enable = FALSE;
+    }else
+        socket_enable = TRUE;
+    
+    if(socket_enable){
 
         printf("Network IP:%s, Port:%d\n", device_ip, comm_port);
         if(tcp_flag){
@@ -158,7 +166,7 @@ int main(int argc, char *argv[])
 
         if(sockfd <= 0){
             perror("creat socket failed\n");
-            exit(-1);
+            exit(ERR_WRONG_SOCK);
         }
 
         memset(&device_addr, 0, sizeof(device_addr));
@@ -170,10 +178,19 @@ int main(int argc, char *argv[])
         if(tcp_flag){
             if(connect(device_fd, (struct sockaddr*)&device_addr, sizeof(device_addr)) < 0){
                 printf("can not connect\n");
-                exit(1);
+                exit(ERR_SOCK_CONCT);
             }
         }
-#endif
+    }else{
+        printf("Serial Port is %s\n", serial_dev);
+        serial_fd = open(serial_dev, O_RDWR | O_NOCTTY | O_NDELAY);
+        if(serial_fd < 0){
+            perror("Could not open serial prot\n");
+            exit(ERR_SERIAL_DEV);
+        }
+        set_serial_options(serial_fd, EVEN_PARITY);
+        device_fd = serial_fd;
+    }
 
     if(soe_flag){
         send_soe(device_fd);
@@ -182,17 +199,17 @@ int main(int argc, char *argv[])
     }
 
     if(yx_flag){
-        read_yx(device_fd);
+        read_teleindication(device_fd);
         sleep(1);
         recv_data(device_fd, buffer);
     }
 
     if(yk_flag){
-        control_yk(device_fd, PRE_CONTROL_CMD);
+        telecontrol(device_fd, PRE_CONTROL_CMD);
         sleep(1);
         recv_data(device_fd, buffer);
         sleep(1);
-        control_yk(device_fd, ACT_CONTROL_CMD);
+        telecontrol(device_fd, ACT_CONTROL_CMD);
         sleep(1);
         recv_data(device_fd, buffer);
     }
@@ -375,7 +392,7 @@ void send_soe(int fd)
  
 }
 
-void read_yx(int fd)
+void read_teleindication(int fd)
 {
     unsigned int crc_checksum;
     
@@ -408,7 +425,7 @@ void read_yx(int fd)
  * if flag is equal zero, it means send act-control packet.
  */
 /* --------------------------------*/
-void control_yk(int fd, unsigned int flag)
+void telecontrol(int fd, unsigned int flag)
 {
     unsigned int crc_checksum;
     
