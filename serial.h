@@ -1,6 +1,9 @@
 #ifndef SERIAL_H
 #define SERIAL_H
 
+#define PROG_NAME "Modbus Tester"
+#define PROG_VERSION "0.0.1"
+
 /** CRC table for the CRC-16. The poly is 0x8005 (x^16 + x^15 + x^2 + 1) */  
 unsigned short const crc16_table[256] = {
     0x0000, 0xC0C1, 0xC181, 0x0140, 0xC301, 0x03C0, 0x0280, 0xC241,
@@ -36,5 +39,18 @@ unsigned short const crc16_table[256] = {
     0x4400, 0x84C1, 0x8581, 0x4540, 0x8701, 0x47C0, 0x4680, 0x8641,  
     0x8201, 0x42C0, 0x4380, 0x8341, 0x4100, 0x81C1, 0x8081, 0x4040  
 }; 
+
+enum BOOL{
+    TRUE = 1,
+    FALSE = 0,
+};
+
+enum ERR_CODE{
+    ERR_WRONG_ARG = 1,
+    ERR_WRONG_SOCK = 2,
+    ERR_WRONG_DEV = 3,
+    ERR_SOCK_CONCT = 4,
+    ERR_SERIAL_DEV = 5,
+};
 
 #endif

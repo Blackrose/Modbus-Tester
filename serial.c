@@ -12,10 +12,6 @@
 #include <unistd.h>
 #include "serial.h"
 
-enum BOOL{
-    TRUE = 1,
-    FALSE = 0,
-};
 
 enum REMOTE_CONTROL_CMD{
     PRE_CONTROL_CMD = 1,
@@ -29,16 +25,7 @@ enum PARITY_TYPE{
     SPACE_PARITY = 's',
 };
 
-enum ERR_CODE{
-    ERR_WRONG_ARG = 1,
-    ERR_WRONG_SOCK = 2,
-    ERR_WRONG_DEV = 3,
-    ERR_SOCK_CONCT = 4,
-    ERR_SERIAL_DEV = 5,
-};
 
-#define PROG_NAME "Modbus Tester"
-#define PROG_VERSION "0.0.1"
 #define APP_TCP
 //#define APP_UDP
 #define DEVICE_PORT 1024
@@ -60,6 +47,7 @@ void set_serial_options(int, int);
 void telecontrol(int fd, unsigned int flag);
 unsigned short crc16(unsigned short crc, unsigned char const *buffer, size_t len);
 void usage_info();
+void read_config_value(int dev_fd);
 
 int main(int argc, char *argv[])
 {
@@ -80,6 +68,7 @@ int main(int argc, char *argv[])
     int yk_flag = FALSE;
     int tcp_flag = FALSE;
     int udp_flag = FALSE;
+    int loop_mode = FALSE;
     struct sockaddr_in device_addr;
     int sockfd = 0;
     int device_fd = 0;
@@ -91,7 +80,7 @@ int main(int argc, char *argv[])
     
     opterr = 0;
 
-    while((arg = getopt(argc, argv, "a:i:l:p:d:svrytuhk")) != -1){
+    while((arg = getopt(argc, argv, "a:i:l:p:d:svrytuhkm")) != -1){
         switch(arg){
             case 'a':
                 tmp = optarg;
@@ -129,6 +118,9 @@ int main(int argc, char *argv[])
                 break;
             case 'k':
                 yk_flag = TRUE;
+                break;
+            case 'm':
+                loop_mode = TRUE;
                 break;
             case 'p':
                 tmp = optarg;
@@ -192,6 +184,7 @@ int main(int argc, char *argv[])
         device_fd = serial_fd;
     }
 
+    do{
     if(soe_flag){
         send_soe(device_fd);
         sleep(1);
@@ -224,19 +217,33 @@ int main(int argc, char *argv[])
     }
 
     if(rconfig_flag){
+        read_config_value(device_fd);
+    }
+
+        sleep(1);
+    }while(loop_mode);
+
+    close(device_fd);
+
+FIN:
+    return 0;
+}
+
+void read_config_value(int dev_fd)
+{
         unsigned int config_cnt;
         float config_value[30];
         int i, j, value_tmp;
 
-        read_config(device_fd);
-        sleep(1);
-        config_cnt = recv_data(device_fd, buffer);
+        read_config(dev_fd);
+        sleep(2);
+        config_cnt = recv_data(dev_fd, buffer);
         printf("Config has %d bytes\n", config_cnt);
 
         for(i = 0, j = 0; i < config_cnt; j++){
             value_tmp = (buffer[i] << 8) | (buffer[i + 1] & 0xff);
-            //printf("item%d = 0x%x\n", j, value_tmp);
             config_value[j] = value_tmp / 100;
+            printf("item%d = 0x%x\n", j, config_value[j]);
 
             i += 2;
         }
@@ -246,7 +253,6 @@ int main(int argc, char *argv[])
         for(i = 0; i < config_cnt / 2; i++){
             printf("%d = %0.2f\n", i, config_value[i]);
         }
-#else
         printf("SD_I = %0.2fA\n", config_value[0]);
         printf("SD_T = %0.2fS\n", config_value[1]);
         printf("XSSD_I = %0.2fA\n", config_value[2]);
@@ -267,16 +273,7 @@ int main(int argc, char *argv[])
         printf("GL1_I = %0.2fA\n", config_value[17]);
         printf("GL1_T = %0.2fS\n", config_value[18]);
 #endif
-    }
 
-    while(1){
-        sleep(1);
-    }
-
-    close(device_fd);
-
-FIN:
-    return 0;
 }
 
 void set_serial_options(int fd, int parity)
@@ -521,7 +518,7 @@ void read_config(int fd)
     buffer[2] = 0x40;
     buffer[3] = 0xc0;
     buffer[4] = 0x00;
-    buffer[5] = 0x01;
+    buffer[5] = 0x05;
     
     crc_checksum = crc16(0xffff, buffer, 6);
     buffer[6] = (char)(crc_checksum & 0xff);
@@ -544,13 +541,14 @@ char* usage_array[] =
     "-s send soe packet",
     "-y send YX packet",
     "-r send read config value packet",
+    "-m use loop mode to query device",
 };
 void usage_info()
 {
     int i;
 
     printf("%s\tver:%s\n", PROG_NAME, PROG_VERSION);
-    for(i = 0; i < 6; i++)
+    for(i = 0; i < 11; i++)
     {
         printf("%s\n", usage_array[i]);
     }
