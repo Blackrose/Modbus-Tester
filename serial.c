@@ -489,11 +489,13 @@ int recv_data(int fd, char* out)
         for(i = 0; i < read_sz; i++)
             printf("0x%02x ", (buffer[i] & 0xff));
         printf("\n");
+    
+        memcpy(out, buffer+3, read_sz - 2);
+    
+        return read_sz - 5;
     }
 
-    memcpy(out, buffer+3, read_sz - 2);
-
-    return read_sz - 5;
+    return 0;
 }
 
 void print_senddata(unsigned int len)
