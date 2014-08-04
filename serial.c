@@ -39,7 +39,7 @@ char buffer[BUF_SIZE];
 
 void read_teleindication(int fd);
 int recv_data(int fd, char* out);
-void read_config(int fd);
+void read_config(int fd, unsigned int addr, unsigned length);
 void send_soe(int fd);
 void change_vendor(int fd, int type);
 void print_senddata(unsigned int len);
@@ -48,6 +48,7 @@ void telecontrol(int fd, unsigned int flag);
 unsigned short crc16(unsigned short crc, unsigned char const *buffer, size_t len);
 void usage_info();
 void read_config_value(int dev_fd);
+void read_protect_value(int dev_fd);
 
 int main(int argc, char *argv[])
 {
@@ -217,7 +218,8 @@ int main(int argc, char *argv[])
     }
 
     if(rconfig_flag){
-        read_config_value(device_fd);
+        read_protect_value(device_fd);
+        //read_config_value(device_fd);
     }
 
         sleep(1);
@@ -235,19 +237,65 @@ void read_config_value(int dev_fd)
         float config_value[30];
         int i, j, value_tmp;
 
-        read_config(dev_fd);
+        read_config(dev_fd, 0x40c0, 10);
         sleep(2);
         config_cnt = recv_data(dev_fd, buffer);
-        printf("Config has %d bytes\n", config_cnt);
+        printf("Recv %d bytes, it has %d config item\n", config_cnt, config_cnt/2);
 
         for(i = 0, j = 0; i < config_cnt; j++){
             value_tmp = (buffer[i] << 8) | (buffer[i + 1] & 0xff);
             config_value[j] = value_tmp / 100;
-            printf("item%d = 0x%x\n", j, config_value[j]);
+            //printf("item%d = 0x%x\n", j, config_value[j]);
 
             i += 2;
         }
-        //sd_i = ((config[1] << 8) | config[2]) / 100;
+
+#if 0
+        for(i = 0; i < config_cnt / 2; i++){
+            printf("%d = %0.2f\n", i, config_value[i]);
+        }
+#else
+        printf("SD_I = %0.2fA\n", config_value[0]);
+        printf("SD_T = %0.2fS\n", config_value[1]);
+        printf("XSSD_I = %0.2fA\n", config_value[2]);
+        printf("XSSD_T = %0.2fS\n", config_value[3]);
+        printf("GL_I = %0.2fA\n", config_value[4]);
+        printf("GL_T = %0.2fS\n", config_value[5]);
+        printf("Z_I = %0.2fA\n", config_value[6]);
+        printf("Z_T = %0.2fS\n", config_value[7]);
+        printf("FSX_I = %0.2fA\n", config_value[8]);
+        printf("FSX_T = %0.2fS\n", config_value[9]);
+        printf("FSX_Curve = %0.2f\n", config_value[10]);
+        printf("GFH_I = %0.2fA\n", config_value[11]);
+        printf("GFH_T = %0.2fS\n", config_value[12]);
+        printf("SD1_I = %0.2fA\n", config_value[13]);
+        printf("SD1_T = %0.2fS\n", config_value[14]);
+        printf("XSSD1_I = %0.2fA\n", config_value[15]);
+        printf("XSSD1_T = %0.2fS\n", config_value[16]);
+        printf("GL1_I = %0.2fA\n", config_value[17]);
+        printf("GL1_T = %0.2fS\n", config_value[18]);
+#endif
+
+}
+
+void read_protect_value(int dev_fd)
+{
+        unsigned int config_cnt;
+        float config_value[30];
+        int i, j, value_tmp;
+
+        read_config(dev_fd, 0x4080, 26);
+        sleep(2);
+        config_cnt = recv_data(dev_fd, buffer);
+        printf("Recv %d bytes, it has %d config item\n", config_cnt, config_cnt/2);
+
+        for(i = 0, j = 0; i < config_cnt; j++){
+            value_tmp = (buffer[i] << 8) | (buffer[i + 1] & 0xff);
+            config_value[j] = value_tmp / 100;
+            //printf("item%d = 0x%x\n", j, config_value[j]);
+
+            i += 2;
+        }
 
 #if 0
         for(i = 0; i < config_cnt / 2; i++){
@@ -507,7 +555,7 @@ void print_senddata(unsigned int len)
 
 }
 
-void read_config(int fd)
+void read_config(int fd, unsigned int addr, unsigned length)
 {
     unsigned int crc_checksum;
     
@@ -515,10 +563,10 @@ void read_config(int fd)
     
     buffer[0] = 0x01;
     buffer[1] = 0x03;
-    buffer[2] = 0x40;
-    buffer[3] = 0xc0;
-    buffer[4] = 0x00;
-    buffer[5] = 0x05;
+    buffer[2] = (addr >> 8) & 0xff;
+    buffer[3] = addr & 0xff;
+    buffer[4] = (length >> 8) & 0xff;
+    buffer[5] = length & 0xff;
     
     crc_checksum = crc16(0xffff, buffer, 6);
     buffer[6] = (char)(crc_checksum & 0xff);
