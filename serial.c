@@ -25,6 +25,8 @@ enum PARITY_TYPE{
     SPACE_PARITY = 's',
 };
 
+// Debug Macro
+// #define CRC_DEBUG
 
 #define APP_TCP
 //#define APP_UDP
@@ -37,6 +39,7 @@ enum PARITY_TYPE{
 #define BUF_SIZE 200
 char buffer[BUF_SIZE];
 
+void read_telemetering(int fd);
 void read_teleindication(int fd);
 int recv_data(int fd, char* out);
 void read_config(int fd, unsigned int addr, unsigned length);
@@ -70,6 +73,7 @@ int main(int argc, char *argv[])
     int tcp_flag = FALSE;
     int udp_flag = FALSE;
     int loop_mode = FALSE;
+    int telemetering_flag = FALSE;
     struct sockaddr_in device_addr;
     int sockfd = 0;
     int device_fd = 0;
@@ -81,7 +85,7 @@ int main(int argc, char *argv[])
     
     opterr = 0;
 
-    while((arg = getopt(argc, argv, "a:i:l:p:d:svrytuhkm")) != -1){
+    while((arg = getopt(argc, argv, "a:i:l:p:d:svrytuhkmc")) != -1){
         switch(arg){
             case 'a':
                 tmp = optarg;
@@ -110,6 +114,9 @@ int main(int argc, char *argv[])
                 break;
             case 'y':
                 yx_flag = TRUE;
+                break;
+            case 'c':
+                telemetering_flag = TRUE;
                 break;
             case 't':
                 tcp_flag = TRUE;
@@ -197,6 +204,13 @@ int main(int argc, char *argv[])
         sleep(1);
         recv_data(device_fd, buffer);
     }
+    
+    if(telemetering_flag){
+        read_telemetering(device_fd);
+        sleep(1);
+        recv_data(device_fd, buffer);
+    }
+
 
     if(yk_flag){
         telecontrol(device_fd, PRE_CONTROL_CMD);
@@ -409,7 +423,10 @@ unsigned short crc16(unsigned short crc, unsigned char const *buffer, size_t len
     while(len--){
         crc = crc16_byte(crc, *buffer++);
     }
-
+#ifdef CRC_DEBUG
+    printf("crc_byte1:%x\n", crc & 0xff);
+    printf("crc_byte2:%x\n", ((crc >> 8) & 0xff));
+#endif
     return crc;
 }
 
@@ -427,8 +444,6 @@ void send_soe(int fd)
     buffer[5] = 0x07;
 
     crc_checksum = crc16(0xffff, buffer, 6);
-    printf("crc_byte1:%x\n", crc_checksum & 0xff);
-    printf("crc_byte2:%x\n", ((crc_checksum >> 8) & 0xff));
     buffer[6] = (char)(crc_checksum & 0xff);
     buffer[7] = (char)((crc_checksum >> 8) & 0xff);
     
@@ -451,8 +466,28 @@ void read_teleindication(int fd)
     buffer[5] = 0x03;
     
     crc_checksum = crc16(0xffff, buffer, 6);
-    printf("crc_byte1:%x\n", crc_checksum & 0xff);
-    printf("crc_byte2:%x\n", ((crc_checksum >> 8) & 0xff));
+    buffer[6] = (char)(crc_checksum & 0xff);
+    buffer[7] = (char)((crc_checksum >> 8) & 0xff);
+    
+    print_senddata(8);
+    write(fd, buffer, 8);
+ 
+}
+
+void read_telemetering(int fd)
+{
+    unsigned int crc_checksum;
+    
+    memset(buffer, 0, BUF_SIZE);
+    
+    buffer[0] = 0x01;
+    buffer[1] = 0x03;
+    buffer[2] = 0x40;
+    buffer[3] = 0x10;
+    buffer[4] = 0x00;
+    buffer[5] = 0x1a;
+    
+    crc_checksum = crc16(0xffff, buffer, 6);
     buffer[6] = (char)(crc_checksum & 0xff);
     buffer[7] = (char)((crc_checksum >> 8) & 0xff);
     
@@ -487,8 +522,6 @@ void telecontrol(int fd, unsigned int flag)
     buffer[5] = 0x00;
     
     crc_checksum = crc16(0xffff, buffer, 6);
-    printf("crc_byte1:%x\n", crc_checksum & 0xff);
-    printf("crc_byte2:%x\n", ((crc_checksum >> 8) & 0xff));
     buffer[6] = (char)(crc_checksum & 0xff);
     buffer[7] = (char)((crc_checksum >> 8) & 0xff);
     
@@ -592,13 +625,14 @@ char* usage_array[] =
     "-y send YX packet",
     "-r send read config value packet",
     "-m use loop mode to query device",
+    "-c send Telemetering packet",
 };
 void usage_info()
 {
     int i;
 
     printf("%s\tver:%s\n", PROG_NAME, PROG_VERSION);
-    for(i = 0; i < 11; i++)
+    for(i = 0; i < 12; i++)
     {
         printf("%s\n", usage_array[i]);
     }
