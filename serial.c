@@ -11,6 +11,7 @@
 #include <arpa/inet.h>
 #include <unistd.h>
 #include "serial.h"
+#include "crc_checksum.h"
 
 
 enum REMOTE_CONTROL_CMD{
@@ -411,23 +412,6 @@ void set_serial_options(int fd, int parity)
     tcsetattr(fd, TCSANOW, &serial_opts);
 
     sleep(2);
-}
-
-unsigned short crc16_byte(unsigned short crc, const unsigned char data)
-{
-    return (crc >> 8) ^ crc16_table[(crc ^ data) & 0xff];
-}
-
-unsigned short crc16(unsigned short crc, unsigned char const *buffer, size_t len)
-{
-    while(len--){
-        crc = crc16_byte(crc, *buffer++);
-    }
-#ifdef CRC_DEBUG
-    printf("crc_byte1:%x\n", crc & 0xff);
-    printf("crc_byte2:%x\n", ((crc >> 8) & 0xff));
-#endif
-    return crc;
 }
 
 void send_soe(int fd)

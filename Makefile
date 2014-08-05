@@ -22,7 +22,7 @@ LDFLAGS=
 endif
 
 SRC_FILES=$(wildcard $(SRC_DIR)/*.c)
-OBJS=$(SRC_DIR)/serial.o
+OBJS=$(SRC_DIR)/serial.o crc_checksum.o
 TARGET=serialtool
 
 all:$(TARGET)
@@ -30,7 +30,7 @@ all:$(TARGET)
 $(TARGET):$(OBJS)
 	$(CC) -o $@ $(LDFLAGS) $?
 $(SRC_DIR)/%.o:%.c
-	$(CC) $(CFLAGS) -o $@ -c $^
+	$(CC) $(CFLAGS) -c $^
 
 .PHONY:clean
 clean:
