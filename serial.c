@@ -12,6 +12,7 @@
 #include <unistd.h>
 #include "serial.h"
 #include "crc_checksum.h"
+#include "modbus.h"
 
 
 enum REMOTE_CONTROL_CMD{
@@ -43,7 +44,6 @@ char buffer[BUF_SIZE];
 void read_telemetering(int fd);
 void read_teleindication(int fd);
 int recv_data(int fd, char* out);
-void read_config(int fd, unsigned int addr, unsigned length);
 void send_soe(int fd);
 void change_vendor(int fd, int type);
 void print_senddata(unsigned int len);
@@ -251,8 +251,9 @@ void read_config_value(int dev_fd)
         unsigned int config_cnt;
         float config_value[30];
         int i, j, value_tmp;
-
-        read_config(dev_fd, 0x40c0, 10);
+        
+        memset(buffer, 0, BUF_SIZE);
+        read_config(dev_fd, 0x40c0, 10, buffer);
         sleep(2);
         config_cnt = recv_data(dev_fd, buffer);
         printf("Recv %d bytes, it has %d config item\n", config_cnt, config_cnt/2);
@@ -299,7 +300,8 @@ void read_protect_value(int dev_fd)
         float config_value[30];
         int i, j, value_tmp;
 
-        read_config(dev_fd, 0x4080, 26);
+        memset(buffer, 0, BUF_SIZE);
+        read_config(dev_fd, 0x4080, 26, buffer);
         sleep(2);
         config_cnt = recv_data(dev_fd, buffer);
         printf("Recv %d bytes, it has %d config item\n", config_cnt, config_cnt/2);
@@ -572,28 +574,6 @@ void print_senddata(unsigned int len)
         printf("0x%02x ", (buffer[i] & 0xff));
     printf("\n");
 
-}
-
-void read_config(int fd, unsigned int addr, unsigned length)
-{
-    unsigned int crc_checksum;
-    
-    memset(buffer, 0, BUF_SIZE);
-    
-    buffer[0] = 0x01;
-    buffer[1] = 0x03;
-    buffer[2] = (addr >> 8) & 0xff;
-    buffer[3] = addr & 0xff;
-    buffer[4] = (length >> 8) & 0xff;
-    buffer[5] = length & 0xff;
-    
-    crc_checksum = crc16(0xffff, buffer, 6);
-    buffer[6] = (char)(crc_checksum & 0xff);
-    buffer[7] = (char)((crc_checksum >> 8) & 0xff);
-    
-    print_senddata(8);
-    write(fd, buffer, 8);
- 
 }
 
 char* usage_array[] = 

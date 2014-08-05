@@ -22,7 +22,7 @@ LDFLAGS=
 endif
 
 SRC_FILES=$(wildcard $(SRC_DIR)/*.c)
-OBJS=$(SRC_DIR)/serial.o crc_checksum.o
+OBJS=$(SRC_DIR)/serial.o crc_checksum.o modbus.o
 TARGET=serialtool
 
 all:$(TARGET)
