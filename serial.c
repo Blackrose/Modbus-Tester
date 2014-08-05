@@ -41,6 +41,8 @@ enum PARITY_TYPE{
 #define BUF_SIZE 200
 char buffer[BUF_SIZE];
 
+#define MS_DELAY 100
+
 void read_telemetering(int fd);
 void read_teleindication(int fd);
 int recv_data(int fd, char* out);
@@ -237,7 +239,7 @@ int main(int argc, char *argv[])
         //read_config_value(device_fd);
     }
 
-        sleep(1);
+        usleep(MS_DELAY);
     }while(loop_mode);
 
     close(device_fd);
@@ -547,11 +549,20 @@ void change_vendor(int fd, int type)
 int recv_data(int fd, char* out)
 {
     int read_sz, i;
+    unsigned int crc_checksum;
 
     memset(buffer, 0, BUF_SIZE);
     
     read_sz = read(fd, buffer, BUF_SIZE);
     if(read_sz > 0){
+        crc_checksum = crc16(0xffff, buffer, read_sz - 2);
+        if(((crc_checksum & 0xff) != (buffer[read_sz - 2] & 0xff)) || ((crc_checksum >> 8 & 0xff) != (buffer[read_sz - 1] & 0xff))){
+            printf("The packet is invalid\n");
+            printf("Recv Origin, 0x%02x, 0x%02x\n", buffer[read_sz - 2] & 0xff, buffer[read_sz -1] & 0xff);
+            printf("Recv Valid, 0x%02x, 0x%02x\n", crc_checksum & 0xff, (crc_checksum >> 8) & 0xff);
+            return 0;
+        }
+
         printf("Recv[%d]:", read_sz);
         for(i = 0; i < read_sz; i++)
             printf("0x%02x ", (buffer[i] & 0xff));
