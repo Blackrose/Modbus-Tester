@@ -41,7 +41,7 @@ enum PARITY_TYPE{
 #define BUF_SIZE 200
 char buffer[BUF_SIZE];
 
-#define MS_DELAY 100
+#define MS_DELAY(x) (x*1000)
 
 void read_telemetering(int fd);
 void read_teleindication(int fd);
@@ -198,39 +198,39 @@ int main(int argc, char *argv[])
     do{
     if(soe_flag){
         send_soe(device_fd);
-        sleep(1);
+        usleep(MS_DELAY(10));
         recv_data(device_fd, buffer);
     }
 
     if(yx_flag){
         read_teleindication(device_fd);
-        sleep(1);
+        usleep(MS_DELAY(10));
         recv_data(device_fd, buffer);
     }
     
     if(telemetering_flag){
         read_telemetering(device_fd);
-        sleep(1);
+        usleep(MS_DELAY(10));
         recv_data(device_fd, buffer);
     }
 
 
     if(yk_flag){
         telecontrol(device_fd, PRE_CONTROL_CMD);
-        sleep(1);
+        usleep(MS_DELAY(10));
         recv_data(device_fd, buffer);
-        sleep(1);
+        usleep(MS_DELAY(10));
         telecontrol(device_fd, ACT_CONTROL_CMD);
-        sleep(1);
+        usleep(MS_DELAY(10));
         recv_data(device_fd, buffer);
     }
 
     if(vendor_flag){
         change_vendor(device_fd, 1);
-        sleep(1);
+        usleep(MS_DELAY(10));
         recv_data(device_fd, buffer);
         change_vendor(device_fd, 2);
-        sleep(1);
+        usleep(MS_DELAY(10));
         recv_data(device_fd, buffer);
     }
 
@@ -239,7 +239,7 @@ int main(int argc, char *argv[])
         //read_config_value(device_fd);
     }
 
-        usleep(MS_DELAY);
+        usleep(MS_DELAY(100));
     }while(loop_mode);
 
     close(device_fd);
