@@ -33,7 +33,7 @@ enum PARITY_TYPE{
 #define APP_TCP
 //#define APP_UDP
 #define DEVICE_PORT 1024
-#define DEVICE_SERVER "192.168.1.136"
+#define DEVICE_SERVER "192.168.1.126"
 //#define RS485_INF
 #define ETHER_INF
 
@@ -175,7 +175,7 @@ int main(int argc, char *argv[])
         memset(&device_addr, 0, sizeof(device_addr));
         device_addr.sin_family = AF_INET;
         device_addr.sin_port = htons(comm_port);
-        device_addr.sin_addr.s_addr = inet_addr(DEVICE_SERVER);
+        device_addr.sin_addr.s_addr = inet_addr(device_ip);
         device_fd = sockfd;
 
         if(tcp_flag){
