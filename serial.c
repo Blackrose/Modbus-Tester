@@ -100,12 +100,10 @@ int main(int argc, char *argv[])
                 strcpy(m_data, tmp);
                 manual_flag = TRUE;
                 //register_addr = atoi(tmp);
-                printf("RegisterAddress(HEX)=%s\n", m_data);
+                printf("manual data=%s\n", m_data);
                 break;
             case 'l':
-                tmp = optarg;
-                register_cnt = atoi(tmp);
-                printf("RequestCount(DEC)=%d\n", register_cnt);
+                loop_mode = TRUE;
                 break;
             case 'i':
                 serial_dev = optarg;
@@ -136,9 +134,6 @@ int main(int argc, char *argv[])
                 break;
             case 'k':
                 yk_flag = TRUE;
-                break;
-            case 'm':
-                loop_mode = TRUE;
                 break;
             case 'p':
                 tmp = optarg;
@@ -666,12 +661,11 @@ char* usage_array[] =
     "-d IP address which you want connect",
     "-p fill server port number to connect",
     "-i Serial port device, eg: -i /dev/ttyUSB0",
-    "-a Modbus register address",
-    "-l Modbus length of target",
+    "-a use manual interactive send data, you must fill it use decimal digital.eg: -a 1.4.65.0.0.7",
     "-s send soe packet",
     "-y send YX packet",
     "-r send read config value packet",
-    "-m use loop mode to query device",
+    "-l use loop mode to query device",
     "-c send Telemetering packet",
 };
 void usage_info()
@@ -679,7 +673,7 @@ void usage_info()
     int i;
 
     printf("%s\tver:%s\n", PROG_NAME, PROG_VERSION);
-    for(i = 0; i < 12; i++)
+    for(i = 0; i < 11; i++)
     {
         printf("%s\n", usage_array[i]);
     }
