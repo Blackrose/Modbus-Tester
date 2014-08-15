@@ -50,13 +50,14 @@ int recv_data(int fd, char* out);
 int send_data(int fd, char *buf, unsigned int size);
 void send_soe(int fd);
 void change_vendor(int fd, int type);
-void print_senddata(unsigned int len);
+void print_senddata(char *buf, unsigned int len);
 void set_serial_options(int, int);
 void telecontrol(int fd, unsigned int flag);
 unsigned short crc16(unsigned short crc, unsigned char const *buffer, size_t len);
 void usage_info();
 void read_config_value(int dev_fd);
 void read_protect_value(int dev_fd);
+void send_manual_data(int fd, char *buf, unsigned int size);
 
 int main(int argc, char *argv[])
 {
@@ -66,7 +67,7 @@ int main(int argc, char *argv[])
     unsigned int register_addr;
     unsigned int register_cnt;
     unsigned int comm_port;
-    int serial_fd, socket_enable = FALSE;
+    int serial_fd, socket_enable = FALSE, serial_enable = FALSE;
     int i;
     unsigned int crc_checksum;
     int arg;
@@ -82,6 +83,8 @@ int main(int argc, char *argv[])
     struct sockaddr_in device_addr;
     int sockfd = 0;
     int device_fd = 0;
+    char m_data[20] = {0};
+    int manual_flag = FALSE;
 
     if(argc < 2){
         usage_info();
@@ -94,8 +97,10 @@ int main(int argc, char *argv[])
         switch(arg){
             case 'a':
                 tmp = optarg;
-                register_addr = atoi(tmp);
-                printf("RegisterAddress(HEX)=%d\n", register_addr);
+                strcpy(m_data, tmp);
+                manual_flag = TRUE;
+                //register_addr = atoi(tmp);
+                printf("RegisterAddress(HEX)=%s\n", m_data);
                 break;
             case 'l':
                 tmp = optarg;
@@ -154,8 +159,8 @@ int main(int argc, char *argv[])
     }
 
     if(serial_dev){
-        socket_enable = FALSE;
-    }else
+        serial_enable = TRUE;
+    }else if(device_ip && comm_port)
         socket_enable = TRUE;
     
     if(socket_enable){
@@ -186,7 +191,9 @@ int main(int argc, char *argv[])
                 exit(ERR_SOCK_CONCT);
             }
         }
-    }else{
+    }
+    
+    if(serial_enable){
         printf("Serial Port is %s\n", serial_dev);
         serial_fd = open(serial_dev, O_RDWR | O_NOCTTY | O_NDELAY);
         if(serial_fd < 0){
@@ -198,6 +205,27 @@ int main(int argc, char *argv[])
     }
 
     do{
+        if(manual_flag){
+            int j = 0, i = 0;
+            char *p = NULL;
+            char data[50] = {0};
+            int data_sz;
+            
+            p = strtok(m_data, ".");
+            do{
+                //printf("%s\n", p);
+                data[i++] = atoi(p);
+            }while(p = strtok(NULL, "."));
+
+            data_sz = i;
+            for(j = 0; j < data_sz; j++)
+                printf("%d\t", data[j]);
+            printf("\n");
+
+            send_manual_data(device_fd, data, data_sz);
+            recv_data(device_fd, data);
+        }
+
     if(soe_flag){
         send_soe(device_fd);
         usleep(MS_DELAY(10));
@@ -244,10 +272,23 @@ int main(int argc, char *argv[])
         usleep(MS_DELAY(100));
     }while(loop_mode);
 
-    close(device_fd);
+    if(device_fd)
+        close(device_fd);
 
 FIN:
     return 0;
+}
+
+void send_manual_data(int fd, char *buf, unsigned int size)
+{
+    unsigned int crc_checksum; 
+
+    crc_checksum = crc16(0xffff, buf, size);
+    //printf("%x\n", crc_checksum);
+    buf[size++] = (char)(crc_checksum & 0xff);
+    buf[size++] = (char)((crc_checksum >> 8) & 0xff);
+    
+    send_data(fd, buf, size);
 }
 
 void read_config_value(int dev_fd)
@@ -475,9 +516,9 @@ void read_telemetering(int fd)
     buffer[0] = 0x01;
     buffer[1] = 0x03;
     buffer[2] = 0x40;
-    buffer[3] = 0x10;
+    buffer[3] = 0x1f;
     buffer[4] = 0x00;
-    buffer[5] = 0x1a;
+    buffer[5] = 0x01;
     
     crc_checksum = crc16(0xffff, buffer, 6);
     buffer[6] = (char)(crc_checksum & 0xff);
@@ -566,7 +607,7 @@ int send_data(int fd, char *buf, unsigned int size)
     gettimeofday(&tv, NULL);
     printf("%d-%02d-%d %02d:%02d:%02d:%03d", time_p->tm_year + 1900, time_p->tm_mon+1, 
                 time_p->tm_mday, time_p->tm_hour+8, time_p->tm_min, time_p->tm_sec, tv.tv_usec/1000);
-    print_senddata(size);
+    print_senddata(buf, size);
 }
 
 int recv_data(int fd, char* out)
@@ -584,7 +625,7 @@ int recv_data(int fd, char* out)
         crc_checksum = crc16(0xffff, buffer, read_sz - 2);
         if(((crc_checksum & 0xff) != (buffer[read_sz - 2] & 0xff)) || ((crc_checksum >> 8 & 0xff) != (buffer[read_sz - 1] & 0xff))){
             printf("The packet is invalid\n");
-            printf("Recv Origin, 0x%02x, 0x%02x\n", buffer[read_sz - 2] & 0xff, buffer[read_sz -1] & 0xff);
+            printf("Recv Origin, 0x%02x, 0x%02x\t", buffer[read_sz - 2] & 0xff, buffer[read_sz -1] & 0xff);
             printf("Recv Valid, 0x%02x, 0x%02x\n", crc_checksum & 0xff, (crc_checksum >> 8) & 0xff);
             return 0;
         }
@@ -607,13 +648,13 @@ int recv_data(int fd, char* out)
     return 0;
 }
 
-void print_senddata(unsigned int len)
+void print_senddata(char *buf, unsigned int len)
 {
     int i;
 
     printf("--Sending[%d]:", len);
     for(i = 0; i < len; i++)
-        printf("0x%02x ", (buffer[i] & 0xff));
+        printf("0x%02x ", (buf[i] & 0xff));
     printf("\n");
 
 }
