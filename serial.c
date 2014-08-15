@@ -10,6 +10,7 @@
 #include <netinet/in.h>
 #include <arpa/inet.h>
 #include <unistd.h>
+#include <time.h>
 #include "serial.h"
 #include "crc_checksum.h"
 #include "modbus.h"
@@ -46,6 +47,7 @@ char buffer[BUF_SIZE];
 void read_telemetering(int fd);
 void read_teleindication(int fd);
 int recv_data(int fd, char* out);
+int send_data(int fd, char *buf, unsigned int size);
 void send_soe(int fd);
 void change_vendor(int fd, int type);
 void print_senddata(unsigned int len);
@@ -434,9 +436,10 @@ void send_soe(int fd)
     crc_checksum = crc16(0xffff, buffer, 6);
     buffer[6] = (char)(crc_checksum & 0xff);
     buffer[7] = (char)((crc_checksum >> 8) & 0xff);
-    
-    print_senddata(8);
-    write(fd, buffer, 8);
+   
+    //print_senddata(8);
+    //write(fd, buffer, 8);
+    send_data(fd, buffer, 8);
  
 }
 
@@ -457,8 +460,9 @@ void read_teleindication(int fd)
     buffer[6] = (char)(crc_checksum & 0xff);
     buffer[7] = (char)((crc_checksum >> 8) & 0xff);
     
-    print_senddata(8);
-    write(fd, buffer, 8);
+    //print_senddata(8);
+    //write(fd, buffer, 8);
+    send_data(fd, buffer, 8);
  
 }
 
@@ -479,8 +483,9 @@ void read_telemetering(int fd)
     buffer[6] = (char)(crc_checksum & 0xff);
     buffer[7] = (char)((crc_checksum >> 8) & 0xff);
     
-    print_senddata(8);
-    write(fd, buffer, 8);
+    //print_senddata(8);
+    //write(fd, buffer, 8);
+    send_data(fd, buffer, 8);
  
 }
 
@@ -513,8 +518,9 @@ void telecontrol(int fd, unsigned int flag)
     buffer[6] = (char)(crc_checksum & 0xff);
     buffer[7] = (char)((crc_checksum >> 8) & 0xff);
     
-    print_senddata(8);
-    write(fd, buffer, 8);
+    //print_senddata(8);
+    //write(fd, buffer, 8);
+    send_data(fd, buffer, 8);
  
 }
 
@@ -541,15 +547,35 @@ void change_vendor(int fd, int type)
     buffer[9] = (char)(crc_checksum & 0xff);
     buffer[10] = (char)((crc_checksum >> 8) & 0xff);
     
-    print_senddata(11);
-    write(fd, buffer, 11);
+    //print_senddata(11);
+    //write(fd, buffer, 11);
+    send_data(fd, buffer, 11);
  
+}
+
+int send_data(int fd, char *buf, unsigned int size)
+{
+    time_t crt_time;
+    struct tm *time_p;
+    struct timeval tv;
+
+    write(fd, buf, size);
+
+    time(&crt_time);
+    time_p = gmtime(&crt_time);
+    gettimeofday(&tv, NULL);
+    printf("%d-%02d-%d %02d:%02d:%02d:%03d", time_p->tm_year + 1900, time_p->tm_mon+1, 
+                time_p->tm_mday, time_p->tm_hour+8, time_p->tm_min, time_p->tm_sec, tv.tv_usec/1000);
+    print_senddata(size);
 }
 
 int recv_data(int fd, char* out)
 {
     int read_sz, i;
     unsigned int crc_checksum;
+    time_t crt_time;
+    struct tm *time_p;
+    struct timeval tv;
 
     memset(buffer, 0, BUF_SIZE);
     
@@ -563,7 +589,12 @@ int recv_data(int fd, char* out)
             return 0;
         }
 
-        printf("Recv[%d]:", read_sz);
+        time(&crt_time);
+        time_p = gmtime(&crt_time);
+        gettimeofday(&tv, NULL);
+        printf("%d-%02d-%d %02d:%02d:%02d:%03d", time_p->tm_year + 1900, time_p->tm_mon+1, 
+                time_p->tm_mday, time_p->tm_hour+8, time_p->tm_min, time_p->tm_sec, tv.tv_usec/1000);
+        printf("--Recv[%d]:", read_sz);
         for(i = 0; i < read_sz; i++)
             printf("0x%02x ", (buffer[i] & 0xff));
         printf("\n");
@@ -580,7 +611,7 @@ void print_senddata(unsigned int len)
 {
     int i;
 
-    printf("Sending[%d]:", len);
+    printf("--Sending[%d]:", len);
     for(i = 0; i < len; i++)
         printf("0x%02x ", (buffer[i] & 0xff));
     printf("\n");
