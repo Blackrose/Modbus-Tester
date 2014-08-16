@@ -43,6 +43,7 @@ enum PARITY_TYPE{
 char buffer[BUF_SIZE];
 
 #define MS_DELAY(x) (x*1000)
+#define DEVICE_ID 0x01
 
 void read_telemetering(int fd);
 void read_teleindication(int fd);
@@ -462,7 +463,7 @@ void send_soe(int fd)
     
     memset(buffer, 0, BUF_SIZE);
     
-    buffer[0] = 0x01;
+    buffer[0] = DEVICE_ID;
     buffer[1] = 0x04;
     buffer[2] = 0x41;
     buffer[3] = 0x00;
@@ -485,7 +486,7 @@ void read_teleindication(int fd)
     
     memset(buffer, 0, BUF_SIZE);
     
-    buffer[0] = 0x01;
+    buffer[0] = DEVICE_ID;
     buffer[1] = 0x03;
     buffer[2] = 0x40;
     buffer[3] = 0x00;
@@ -508,7 +509,7 @@ void read_telemetering(int fd)
     
     memset(buffer, 0, BUF_SIZE);
     
-    buffer[0] = 0x01;
+    buffer[0] = DEVICE_ID;
     buffer[1] = 0x03;
     buffer[2] = 0x40;
     buffer[3] = 0x1f;
@@ -540,7 +541,7 @@ void telecontrol(int fd, unsigned int flag)
     
     memset(buffer, 0, BUF_SIZE);
     
-    buffer[0] = 0x01;
+    buffer[0] = DEVICE_ID;
     buffer[1] = 0x05;
     if(flag)
         buffer[2] = 0x51;
@@ -566,7 +567,7 @@ void change_vendor(int fd, int type)
     
     memset(buffer, 0, BUF_SIZE);
     
-    buffer[0] = 0x01;
+    buffer[0] = DEVICE_ID;
     buffer[1] = 0x10;
     if(type == 1)
         buffer[2] = 0x42;
