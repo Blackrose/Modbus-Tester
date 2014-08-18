@@ -21,8 +21,8 @@ else
 LDFLAGS=
 endif
 
-SRC_FILES=$(wildcard $(SRC_DIR)/*.c)
-OBJS=$(SRC_DIR)/serial.o crc_checksum.o modbus.o
+SRC_FILES=$(wildcard *.c)
+OBJS=$(patsubst %.c,%.o, $(SRC_FILES))
 TARGET=serialtool
 
 all:$(TARGET)
