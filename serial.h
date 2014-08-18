@@ -15,6 +15,12 @@ enum ERR_CODE{
     ERR_WRONG_DEV = 3,
     ERR_SOCK_CONCT = 4,
     ERR_SERIAL_DEV = 5,
+    ERR_WRONG_PORT,
 };
 
+enum DEVICE_VENDOR{
+    VENDOR_XAPZ = 1,
+    VENDOR_KT3310,
+    VENDOR_TH9000,
+};
 #endif

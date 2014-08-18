@@ -43,7 +43,8 @@ enum PARITY_TYPE{
 char buffer[BUF_SIZE];
 
 #define MS_DELAY(x) (x*1000)
-#define DEVICE_ID 0x01
+#define DEVICE_ID 126
+#define DEBUG
 
 void read_telemetering(int fd);
 void read_teleindication(int fd);
@@ -67,8 +68,8 @@ int main(int argc, char *argv[])
     char *tmp = NULL;
     unsigned int register_addr;
     unsigned int register_cnt;
-    unsigned int comm_port;
-    int serial_fd, socket_enable = FALSE, serial_enable = FALSE;
+    unsigned int comm_port = 0;
+    int serial_fd, socket_isenable = FALSE, serial_isenable = FALSE;
     int i;
     unsigned int crc_checksum;
     int arg;
@@ -108,9 +109,11 @@ int main(int argc, char *argv[])
                 break;
             case 'i':
                 serial_dev = optarg;
+                serial_isenable = TRUE;
                 break;
             case 'd':
                 device_ip = optarg;
+                socket_isenable = TRUE;
                 break;
             case 's':
                 soe_flag = TRUE;
@@ -149,17 +152,18 @@ int main(int argc, char *argv[])
         }
     }
 
-    if(serial_dev && (tcp_flag || udp_flag)){
+    if(serial_isenable && socket_isenable){
         printf("You could choose communicate device from Serial port or Network interface. Don't use both!!!\n");
         exit(ERR_WRONG_DEV);
     }
 
-    if(serial_dev){
-        serial_enable = TRUE;
-    }else if(device_ip && comm_port)
-        socket_enable = TRUE;
+    if(socket_isenable && 0 != comm_port){
+        printf("If you want to use socket interface, you must give me a port\n");
+        exit(ERR_WRONG_PORT);
+    }
+
     
-    if(socket_enable){
+    if(socket_isenable){
 
         printf("Network IP:%s, Port:%d\n", device_ip, comm_port);
         if(tcp_flag){
@@ -189,7 +193,7 @@ int main(int argc, char *argv[])
         }
     }
     
-    if(serial_enable){
+    if(serial_isenable){
         printf("Serial Port is %s\n", serial_dev);
         serial_fd = open(serial_dev, O_RDWR | O_NOCTTY | O_NDELAY);
         if(serial_fd < 0){
@@ -222,18 +226,18 @@ int main(int argc, char *argv[])
             recv_data(device_fd, data);
         }
 
-    if(soe_flag){
-        send_soe(device_fd);
-        usleep(MS_DELAY(10));
-        recv_data(device_fd, buffer);
-    }
-
     if(yx_flag){
         read_teleindication(device_fd);
         usleep(MS_DELAY(10));
         recv_data(device_fd, buffer);
     }
-    
+ 
+    if(soe_flag){
+        send_soe(device_fd);
+        usleep(MS_DELAY(10));
+        recv_data(device_fd, buffer);
+    }
+   
     if(telemetering_flag){
         read_telemetering(device_fd);
         usleep(MS_DELAY(10));
@@ -466,7 +470,7 @@ void send_soe(int fd)
     buffer[0] = DEVICE_ID;
     buffer[1] = 0x04;
     buffer[2] = 0x41;
-    buffer[3] = 0x00;
+    buffer[3] = 0x20;
     buffer[4] = 0x00;
     buffer[5] = 0x07;
 
@@ -547,7 +551,7 @@ void telecontrol(int fd, unsigned int flag)
         buffer[2] = 0x51;
     else
         buffer[2] = 0x50;
-    buffer[3] = 0x08;
+    buffer[3] = 0x01;
     buffer[4] = 0x5a;
     buffer[5] = 0x00;
     
@@ -578,7 +582,7 @@ void change_vendor(int fd, int type)
     buffer[5] = 0x01;
     buffer[6] = 0x02;
     buffer[7] = 0x00;
-    buffer[8] = 0x3;
+    buffer[8] = VENDOR_KT3310;
     
     crc_checksum = crc16(0xffff, buffer, 9);
     buffer[9] = (char)(crc_checksum & 0xff);
@@ -623,6 +627,12 @@ int recv_data(int fd, char* out)
             printf("The packet is invalid\n");
             printf("Recv Origin, 0x%02x, 0x%02x\t", buffer[read_sz - 2] & 0xff, buffer[read_sz -1] & 0xff);
             printf("Recv Valid, 0x%02x, 0x%02x\n", crc_checksum & 0xff, (crc_checksum >> 8) & 0xff);
+#ifdef DEBUG
+            printf("****invalid data, size=%d\n", read_sz);
+            for(i = 0; i < read_sz; i++)
+                printf("0x%02x ", (buffer[i] & 0xff));
+            printf("\n");
+#endif
             return 0;
         }
 
@@ -668,13 +678,14 @@ char* usage_array[] =
     "-r send read config value packet",
     "-l use loop mode to query device",
     "-c send Telemetering packet",
+    "-k send RemoteControl packet",
 };
 void usage_info()
 {
     int i;
 
     printf("%s\tver:%s\n", PROG_NAME, PROG_VERSION);
-    for(i = 0; i < 11; i++)
+    for(i = 0; i < 12; i++)
     {
         printf("%s\n", usage_array[i]);
     }
