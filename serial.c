@@ -667,10 +667,10 @@ void print_senddata(char *buf, unsigned int len)
 
 char* usage_array = 
     "-t use tcp socket type\n"
-    "-u use udp socket type\n"
+    "-u use udp socket type. Choose only one type from TCP and UDP.\n"
     "-d IP address which you want connect\n"
     "-p fill server port number to connect\n"
-    "-i Serial port device, eg: -i /dev/ttyUSB0\n"
+    "-i Serial port device.On Linux likes /dev/ttyS0 or /dev/ttyUSB0. On Mac OS X likes /dev/cu.usbserial.\n"
     "-a use manual interactive send data, you must fill it use decimal digital.eg: -a 1.4.65.0.0.7\n"
     "-s send soe packet\n"
     "-y send YX packet\n"
@@ -678,17 +678,11 @@ char* usage_array =
     "-l use loop mode to query device\n"
     "-c send Telemetering packet\n"
     "-k send RemoteControl packet\n"
+    "Use serial port sample:\t-i /dev/ttyUSB0 -y\n"
+    "Use socket sample:\t-d 192.168.1.19 -p 8964 -t -y\n"
 ;
 void usage_info()
 {
-    int i;
-
     printf("%s\tver:%s\n", PROG_NAME, PROG_VERSION);
-        printf("%s", usage_array);
-#if 0
-    for(i = 0; i < 12; i++)
-    {
-        printf("%s\n", usage_array[i]);
-    }
-#endif
+    printf("%s", usage_array);
 }
