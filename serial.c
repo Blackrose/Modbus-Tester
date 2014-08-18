@@ -43,7 +43,7 @@ enum PARITY_TYPE{
 char buffer[BUF_SIZE];
 
 #define MS_DELAY(x) (x*1000)
-#define DEVICE_ID 126
+#define DEVICE_ID 1
 #define DEBUG
 
 void read_telemetering(int fd);
@@ -228,39 +228,39 @@ int main(int argc, char *argv[])
 
     if(yx_flag){
         read_teleindication(device_fd);
-        usleep(MS_DELAY(10));
+        usleep(MS_DELAY(90));
         recv_data(device_fd, buffer);
     }
  
     if(soe_flag){
         send_soe(device_fd);
-        usleep(MS_DELAY(10));
+        usleep(MS_DELAY(90));
         recv_data(device_fd, buffer);
     }
    
     if(telemetering_flag){
         read_telemetering(device_fd);
-        usleep(MS_DELAY(10));
+        usleep(MS_DELAY(90));
         recv_data(device_fd, buffer);
     }
 
 
     if(yk_flag){
         telecontrol(device_fd, PRE_CONTROL_CMD);
-        usleep(MS_DELAY(10));
+        usleep(MS_DELAY(90));
         recv_data(device_fd, buffer);
-        usleep(MS_DELAY(10));
+        usleep(MS_DELAY(90));
         telecontrol(device_fd, ACT_CONTROL_CMD);
-        usleep(MS_DELAY(10));
+        usleep(MS_DELAY(90));
         recv_data(device_fd, buffer);
     }
 
     if(vendor_flag){
         change_vendor(device_fd, 1);
-        usleep(MS_DELAY(10));
+        usleep(MS_DELAY(90));
         recv_data(device_fd, buffer);
         change_vendor(device_fd, 2);
-        usleep(MS_DELAY(10));
+        usleep(MS_DELAY(90));
         recv_data(device_fd, buffer);
     }
 
@@ -665,28 +665,30 @@ void print_senddata(char *buf, unsigned int len)
 
 }
 
-char* usage_array[] = 
-{
-    "-t use tcp socket type",
-    "-u use udp socket type",
-    "-d IP address which you want connect",
-    "-p fill server port number to connect",
-    "-i Serial port device, eg: -i /dev/ttyUSB0",
-    "-a use manual interactive send data, you must fill it use decimal digital.eg: -a 1.4.65.0.0.7",
-    "-s send soe packet",
-    "-y send YX packet",
-    "-r send read config value packet",
-    "-l use loop mode to query device",
-    "-c send Telemetering packet",
-    "-k send RemoteControl packet",
-};
+char* usage_array = 
+    "-t use tcp socket type\n"
+    "-u use udp socket type\n"
+    "-d IP address which you want connect\n"
+    "-p fill server port number to connect\n"
+    "-i Serial port device, eg: -i /dev/ttyUSB0\n"
+    "-a use manual interactive send data, you must fill it use decimal digital.eg: -a 1.4.65.0.0.7\n"
+    "-s send soe packet\n"
+    "-y send YX packet\n"
+    "-r send read config value packet\n"
+    "-l use loop mode to query device\n"
+    "-c send Telemetering packet\n"
+    "-k send RemoteControl packet\n"
+;
 void usage_info()
 {
     int i;
 
     printf("%s\tver:%s\n", PROG_NAME, PROG_VERSION);
+        printf("%s", usage_array);
+#if 0
     for(i = 0; i < 12; i++)
     {
         printf("%s\n", usage_array[i]);
     }
+#endif
 }
