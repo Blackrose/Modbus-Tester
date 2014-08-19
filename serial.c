@@ -43,7 +43,7 @@ enum PARITY_TYPE{
 char buffer[BUF_SIZE];
 
 #define MS_DELAY(x) (x*1000)
-#define DEVICE_ID 1
+#define DEVICE_ID 126
 #define DEBUG
 
 void read_telemetering(int fd);
@@ -60,7 +60,9 @@ void usage_info();
 void read_config_value(int dev_fd);
 void read_protect_value(int dev_fd);
 void send_manual_data(int fd, char *buf, unsigned int size);
+void send_timetick(int fd);
 
+int device_id = 0;
 int main(int argc, char *argv[])
 {
     char *serial_dev = NULL;
@@ -81,6 +83,7 @@ int main(int argc, char *argv[])
     int tcp_flag = FALSE;
     int udp_flag = FALSE;
     int loop_mode = FALSE;
+    int timetick_flag = FALSE;
     int telemetering_flag = FALSE;
     struct sockaddr_in device_addr;
     int sockfd = 0;
@@ -95,7 +98,7 @@ int main(int argc, char *argv[])
     
     opterr = 0;
 
-    while((arg = getopt(argc, argv, "a:i:l:p:d:svrytuhkmc")) != -1){
+    while((arg = getopt(argc, argv, "a:i:l:p:d:z:svrytuhkmcx")) != -1){
         switch(arg){
             case 'a':
                 tmp = optarg;
@@ -143,6 +146,13 @@ int main(int argc, char *argv[])
                 tmp = optarg;
                 comm_port = atoi(tmp);
                 break;
+            case 'z':
+                tmp = optarg;
+                device_id = atoi(tmp);
+                break;
+            case 'x':
+                timetick_flag = TRUE;
+                break;
             case 'h':
                 usage_info();
                 goto FIN;
@@ -157,9 +167,15 @@ int main(int argc, char *argv[])
         exit(ERR_WRONG_DEV);
     }
 
-    if(socket_isenable && 0 != comm_port){
+    if(socket_isenable && 0 == comm_port){
         printf("If you want to use socket interface, you must give me a port\n");
         exit(ERR_WRONG_PORT);
+
+    }
+        
+    if(manual_flag == FALSE && 0 == device_id){
+        printf("You must give a device id.It will used by first byte of packet.\n");
+        exit(ERR_WRONG_DEVICEID);
     }
 
     
@@ -268,6 +284,12 @@ int main(int argc, char *argv[])
         read_protect_value(device_fd);
         //read_config_value(device_fd);
     }
+    
+        if(timetick_flag){
+            send_timetick(device_fd);
+            usleep(MS_DELAY(90));
+        }
+
 
         usleep(MS_DELAY(100));
     }while(loop_mode);
@@ -467,12 +489,12 @@ void send_soe(int fd)
     
     memset(buffer, 0, BUF_SIZE);
     
-    buffer[0] = DEVICE_ID;
+    buffer[0] = device_id;
     buffer[1] = 0x04;
     buffer[2] = 0x41;
     buffer[3] = 0x20;
     buffer[4] = 0x00;
-    buffer[5] = 0x07;
+    buffer[5] = 0x08;
 
     crc_checksum = crc16(0xffff, buffer, 6);
     buffer[6] = (char)(crc_checksum & 0xff);
@@ -484,13 +506,43 @@ void send_soe(int fd)
  
 }
 
+void send_timetick(int fd)
+{
+    unsigned int crc_checksum;
+    
+    memset(buffer, 0, BUF_SIZE);
+    
+    buffer[0] = device_id;
+    buffer[1] = 0x10;
+    buffer[2] = 0x43;
+    buffer[3] = 0x00;
+    buffer[4] = 0x00;
+    buffer[5] = 0x06;
+
+    buffer[6] = 0x0e;
+    buffer[7] = 0x08;
+    buffer[8] = 0x08;
+    buffer[9] = 0x08;
+    buffer[10] = 0x14;
+    buffer[11] = 0x32;
+
+    crc_checksum = crc16(0xffff, buffer, 12);
+    buffer[12] = (char)(crc_checksum & 0xff);
+    buffer[13] = (char)((crc_checksum >> 8) & 0xff);
+   
+    //print_senddata(8);
+    //write(fd, buffer, 8);
+    send_data(fd, buffer, 14);
+ 
+}
+
 void read_teleindication(int fd)
 {
     unsigned int crc_checksum;
     
     memset(buffer, 0, BUF_SIZE);
     
-    buffer[0] = DEVICE_ID;
+    buffer[0] = device_id;
     buffer[1] = 0x03;
     buffer[2] = 0x40;
     buffer[3] = 0x00;
@@ -545,14 +597,14 @@ void telecontrol(int fd, unsigned int flag)
     
     memset(buffer, 0, BUF_SIZE);
     
-    buffer[0] = DEVICE_ID;
+    buffer[0] = device_id;
     buffer[1] = 0x05;
     if(flag)
         buffer[2] = 0x51;
     else
         buffer[2] = 0x50;
-    buffer[3] = 0x01;
-    buffer[4] = 0x5a;
+    buffer[3] = 0x0c;
+    buffer[4] = 0xa5;
     buffer[5] = 0x00;
     
     crc_checksum = crc16(0xffff, buffer, 6);
@@ -571,7 +623,7 @@ void change_vendor(int fd, int type)
     
     memset(buffer, 0, BUF_SIZE);
     
-    buffer[0] = DEVICE_ID;
+    buffer[0] = device_id;
     buffer[1] = 0x10;
     if(type == 1)
         buffer[2] = 0x42;
