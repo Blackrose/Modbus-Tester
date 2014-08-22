@@ -211,7 +211,7 @@ int main(int argc, char *argv[])
     
     if(serial_isenable){
         printf("Serial Port is %s\n", serial_dev);
-        serial_fd = open(serial_dev, O_RDWR | O_NOCTTY | O_NDELAY);
+        serial_fd = open(serial_dev, O_RDWR | O_NOCTTY | O_NDELAY | O_NONBLOCK);
         if(serial_fd < 0){
             perror("Could not open serial prot\n");
             exit(ERR_SERIAL_DEV);
