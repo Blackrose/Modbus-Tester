@@ -419,7 +419,10 @@ void set_serial_options(int fd, int parity)
 
     bzero(&serial_opts, sizeof(serial_opts));
 
-    serial_opts.c_cflag |= (B4800 | CLOCAL | CREAD);
+    cfsetispeed(&serial_opts, B4800);
+    cfsetospeed(&serial_opts, B4800);
+
+    serial_opts.c_cflag |= (CLOCAL | CREAD);
     serial_opts.c_cflag &= ~CSIZE;
     serial_opts.c_cflag |= (CS8);
     
